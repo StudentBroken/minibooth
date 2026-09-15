@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <rect width="40" height="40" fill="#F4EBD9"/>
+  <rect x="0" y="0" width="20" height="20" fill="#E4D3B8"/>
+  <rect x="20" y="20" width="20" height="20" fill="#E4D3B8"/>
+  <!-- Subtle retro paper noise hatch lines -->
+  <line x1="0" y1="10" x2="20" y2="10" stroke="#C8B495" stroke-width="0.75" stroke-dasharray="2,3"/>
+  <line x1="20" y1="30" x2="40" y2="30" stroke="#C8B495" stroke-width="0.75" stroke-dasharray="2,3"/>
+  <rect x="0.5" y="0.5" width="39" height="39" fill="none" stroke="#2B2621" stroke-width="0.4" stroke-opacity="0.25"/>
+</svg>
