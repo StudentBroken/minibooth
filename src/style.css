@@ -414,60 +414,88 @@ body {
   border-radius: 50%;
 }
 
-/* Countdown Overlay */
+/* Countdown Overlay - Completely Non-blocking & Clear Viewfinder */
 .countdown-overlay {
   position: absolute;
   inset: 0;
   display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(30, 27, 24, 0.35);
-  backdrop-filter: blur(2px);
-  z-index: 20;
+  pointer-events: none;
+  z-index: 25;
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .countdown-overlay.active {
+  display: block;
+}
+
+/* Thin Top Progress Timer Line */
+.countdown-timer-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 5px;
+  width: 100%;
+  background: var(--comic-red);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: width 0.25s linear;
+}
+
+/* Floating Corner Badge */
+.countdown-badge-wrapper {
+  position: absolute;
+  top: 14px;
+  right: 14px;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
 }
 
 .countdown-burst {
-  width: 160px;
-  height: 160px;
+  width: 62px;
+  height: 62px;
   background: var(--comic-yellow-pop);
-  border: 5px solid var(--ink-black);
-  box-shadow: var(--shadow-comic-lg);
+  border: 3.5px solid var(--ink-black);
+  box-shadow: var(--shadow-comic-sm);
   border-radius: 50%;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   animation: comicPulse 0.95s infinite cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes comicPulse {
-  0% { transform: scale(0.9); }
+  0% { transform: scale(0.92); }
   50% { transform: scale(1.08); }
-  100% { transform: scale(0.9); }
+  100% { transform: scale(0.92); }
 }
 
 .countdown-number {
   font-family: var(--font-comic);
-  font-size: 5.5rem;
+  font-size: 2.8rem;
   line-height: 1;
   color: var(--ink-black);
-  text-shadow: 3px 3px 0 #FFF;
+  text-shadow: 2px 2px 0 #FFF;
+}
+
+.countdown-number.snap {
+  font-size: 1.35rem;
+  color: var(--comic-red);
 }
 
 .countdown-sub {
   font-family: var(--font-comic);
-  font-size: 1.1rem;
-  letter-spacing: 1px;
+  font-size: 0.8rem;
+  letter-spacing: 0.8px;
   color: var(--comic-red);
   background: #FFF;
-  padding: 2px 8px;
+  padding: 1px 6px;
   border: var(--border-thin);
   border-radius: 3px;
-  margin-top: -6px;
+  box-shadow: 1px 1px 0 var(--ink-black);
+  white-space: nowrap;
 }
 
 /* Shot Badge */

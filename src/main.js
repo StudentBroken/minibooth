@@ -88,6 +88,7 @@ const elements = {
   btnFlipCam: document.getElementById('btn-flip-cam'),
   btnMirrorCam: document.getElementById('btn-mirror-cam'),
   countdownOverlay: document.getElementById('countdown-overlay'),
+  countdownTimerBar: document.getElementById('countdown-timer-bar'),
   countdownNum: document.getElementById('countdown-num'),
   countdownSub: document.getElementById('countdown-sub'),
   shotBadge: document.getElementById('shot-badge'),
@@ -267,13 +268,22 @@ async function startBoothSequence() {
     elements.currentShotIndex.textContent = shot;
     elements.shotBadge.style.display = 'block';
     elements.countdownOverlay.classList.add('active');
+    if (elements.countdownTimerBar) {
+      elements.countdownTimerBar.style.width = '100%';
+    }
 
     // 6-second countdown
     for (let c = COUNTDOWN_SECONDS; c >= 1; c--) {
       if (state.cancelShooting) break;
 
+      elements.countdownNum.classList.remove('snap');
       elements.countdownNum.textContent = c;
-      elements.countdownSub.textContent = c <= 2 ? 'HOLD THAT POSE!' : 'GET READY!';
+      elements.countdownSub.textContent = c <= 2 ? 'HOLD POSE!' : 'GET READY!';
+
+      // Animate top timer bar
+      if (elements.countdownTimerBar) {
+        elements.countdownTimerBar.style.width = `${((c - 1) / COUNTDOWN_SECONDS) * 100}%`;
+      }
 
       // Audio tick
       sfx.playTick(c <= 2);
@@ -285,8 +295,12 @@ async function startBoothSequence() {
     if (state.cancelShooting) break;
 
     // SNAP MOMENT!
-    elements.countdownNum.textContent = 'SNAP!';
-    elements.countdownSub.textContent = '★ FLASH! ★';
+    elements.countdownNum.classList.add('snap');
+    elements.countdownNum.textContent = '📸';
+    elements.countdownSub.textContent = '★ SNAP! ★';
+    if (elements.countdownTimerBar) {
+      elements.countdownTimerBar.style.width = '0%';
+    }
 
     // Trigger visual flash
     elements.shutterFlash.classList.add('flashing');
