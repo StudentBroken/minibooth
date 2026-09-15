@@ -1232,13 +1232,23 @@ body {
   display: block;
   max-width: 100%;
   height: auto;
+  -webkit-touch-callout: default !important;
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+  pointer-events: auto !important;
+  cursor: pointer;
 }
 
 .preview-instructions {
   font-family: var(--font-typewriter);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--ink-charcoal);
   text-align: center;
+  line-height: 1.35;
+  background: var(--paper-warm);
+  padding: 8px 12px;
+  border: 1px dashed var(--paper-shadow);
+  border-radius: 4px;
 }
 
 .preview-modal-footer {
@@ -1246,10 +1256,14 @@ body {
   background: var(--paper-warm);
   border-top: var(--border-medium);
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .preview-modal-footer .btn-retro {
   flex: 1;
+  min-width: 130px;
+  font-size: 1rem;
+  padding: 8px 12px;
 }
 

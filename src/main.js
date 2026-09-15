@@ -129,6 +129,7 @@ const elements = {
   previewModal: document.getElementById('preview-modal'),
   previewModalImg: document.getElementById('preview-modal-img'),
   btnCloseModal: document.getElementById('btn-close-modal'),
+  btnModalShare: document.getElementById('btn-modal-share'),
   btnModalDownload: document.getElementById('btn-modal-download'),
   btnModalCloseBottom: document.getElementById('btn-modal-close-bottom'),
 
@@ -139,6 +140,7 @@ const elements = {
 // Variable to store current exported blob
 let currentExportedBlob = null;
 let currentExportedUrl = null;
+let exportUpdateTimeout = null;
 
 /**
  * Trigger file download from Blob with guaranteed valid filename & extension
@@ -446,6 +448,51 @@ async function renderStudio() {
     scale: 1, // 1x for fast interactive preview
     activeSlotIndex: state.activeSlotIndex
   });
+
+  // Pre-generate high-res export blob in the background so user clicks are instant and preserve iOS user activation
+  scheduleExportCacheUpdate();
+}
+
+/**
+ * Schedule background high-res strip export cache update (debounced)
+ */
+function scheduleExportCacheUpdate() {
+  if (exportUpdateTimeout) clearTimeout(exportUpdateTimeout);
+  exportUpdateTimeout = setTimeout(updateExportBlob, 200);
+}
+
+async function updateExportBlob() {
+  try {
+    const exportCanvas = document.createElement('canvas');
+    const layout = getLayoutById(state.selectedLayoutId);
+    const frame = frameManager.getSelectedFrame();
+
+    await renderStrip({
+      targetCanvas: exportCanvas,
+      layout,
+      slottedPhotos: state.slottedPhotos,
+      frame,
+      filterId: state.selectedFilterId,
+      title: state.boothTitle,
+      dateText: state.boothDate,
+      scale: 2,
+      activeSlotIndex: -1
+    });
+
+    exportCanvas.toBlob((blob) => {
+      if (!blob) return;
+      currentExportedBlob = blob;
+      if (currentExportedUrl) {
+        URL.revokeObjectURL(currentExportedUrl);
+      }
+      currentExportedUrl = URL.createObjectURL(blob);
+      if (elements.previewModalImg) {
+        elements.previewModalImg.src = currentExportedUrl;
+      }
+    }, 'image/png');
+  } catch (err) {
+    console.warn('Background export cache error:', err);
+  }
 }
 
 /**
@@ -693,116 +740,90 @@ function setupEvents() {
     renderStudio();
   });
 
-  // High-Resolution Download
-  elements.btnDownloadStrip.addEventListener('click', async () => {
-    showToast('GENERATING PHOTO STRIP...', 1200);
-
-    const exportCanvas = document.createElement('canvas');
-    const layout = getLayoutById(state.selectedLayoutId);
-    const frame = frameManager.getSelectedFrame();
-
-    // Scale 2 is crisp print-grade resolution (e.g. 1200 x 4920 px)
-    await renderStrip({
-      targetCanvas: exportCanvas,
-      layout,
-      slottedPhotos: state.slottedPhotos,
-      frame,
-      filterId: state.selectedFilterId,
-      title: state.boothTitle,
-      dateText: state.boothDate,
-      scale: 2,
-      activeSlotIndex: -1 // no highlight ring in final export
-    });
-
-    exportCanvas.toBlob((blob) => {
-      if (!blob) {
-        showToast('Error generating image file', 2000);
-        return;
-      }
-
-      currentExportedBlob = blob;
-      const fileName = downloadBlobFile(blob, 'photobooth-strip');
-
-      // Update preview modal for mobile users
-      if (currentExportedUrl) {
-        URL.revokeObjectURL(currentExportedUrl);
-      }
-      currentExportedUrl = URL.createObjectURL(blob);
+  // Modal helpers
+  function openPreviewModal() {
+    if (currentExportedUrl && elements.previewModalImg) {
       elements.previewModalImg.src = currentExportedUrl;
-      elements.previewModal.classList.add('active');
+    }
+    elements.previewModal.classList.add('active');
+  }
 
-      showToast(`★ SAVED: ${fileName} ★`, 3000);
-    }, 'image/png');
-  });
+  function closePreviewModal() {
+    elements.previewModal.classList.remove('active');
+  }
 
-  // Native Mobile Web Share API
-  elements.btnShareStrip.addEventListener('click', async () => {
-    showToast('PREPARING STRIP TO SHARE...', 1200);
+  // Native Share Sheet (invoked synchronously within user gesture)
+  function triggerNativeShare() {
+    if (!currentExportedBlob) {
+      showToast('Preparing strip, please wait a moment...', 1500);
+      return;
+    }
 
-    const exportCanvas = document.createElement('canvas');
-    const layout = getLayoutById(state.selectedLayoutId);
-    const frame = frameManager.getSelectedFrame();
-
-    await renderStrip({
-      targetCanvas: exportCanvas,
-      layout,
-      slottedPhotos: state.slottedPhotos,
-      frame,
-      filterId: state.selectedFilterId,
-      title: state.boothTitle,
-      dateText: state.boothDate,
-      scale: 2,
-      activeSlotIndex: -1
+    const file = new File([currentExportedBlob], 'photobooth-strip.png', {
+      type: 'image/png',
+      lastModified: Date.now()
     });
 
-    exportCanvas.toBlob(async (blob) => {
-      if (!blob) return;
-      currentExportedBlob = blob;
-
-      const file = new File([blob], 'photobooth-strip.png', { type: 'image/png' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: 'My Retro Comic Photobooth Strip',
-            text: 'Check out my photobooth strip!'
-          });
-        } catch (shareErr) {
-          if (shareErr.name !== 'AbortError') {
-            console.warn('Share error:', shareErr);
-          }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: 'Retro Comic Photobooth Strip'
+      }).then(() => {
+        showToast('★ SHARED! ★', 1500);
+      }).catch(err => {
+        if (err.name !== 'AbortError') {
+          console.warn('Share error:', err);
+          openPreviewModal();
         }
-      } else {
-        // Fallback to downloading and showing modal
-        if (currentExportedUrl) {
-          URL.revokeObjectURL(currentExportedUrl);
-        }
-        currentExportedUrl = URL.createObjectURL(blob);
-        elements.previewModalImg.src = currentExportedUrl;
-        elements.previewModal.classList.add('active');
-        downloadBlobFile(blob, 'photobooth-strip');
-        showToast('Direct sharing not supported: strip saved & preview opened!', 3000);
-      }
-    }, 'image/png');
-  });
+      });
+    } else {
+      openPreviewModal();
+      downloadBlobFile(currentExportedBlob, 'photobooth-strip');
+      showToast('Image opened in preview for saving!', 2500);
+    }
+  }
+
+  // Download / Save Handler (iOS & Desktop friendly)
+  function triggerDownloadOrSave() {
+    if (!currentExportedBlob) {
+      showToast('Preparing strip, please wait...', 1500);
+      return;
+    }
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isIOS) {
+      // On iPhone: open modal for long-press "Save to Photos" AND trigger native Share Sheet
+      openPreviewModal();
+      triggerNativeShare();
+    } else {
+      // On Desktop / Android: trigger direct download
+      const fileName = downloadBlobFile(currentExportedBlob, 'photobooth-strip');
+      openPreviewModal();
+      showToast(`★ SAVED: ${fileName} ★`, 2500);
+    }
+  }
+
+  // Buttons
+  elements.btnDownloadStrip.addEventListener('click', triggerDownloadOrSave);
+  elements.btnShareStrip.addEventListener('click', triggerNativeShare);
 
   // Modal event listeners
-  elements.btnCloseModal.addEventListener('click', () => {
-    elements.previewModal.classList.remove('active');
-  });
-  elements.btnModalCloseBottom.addEventListener('click', () => {
-    elements.previewModal.classList.remove('active');
-  });
-  elements.previewModal.addEventListener('click', (e) => {
-    if (e.target === elements.previewModal) {
-      elements.previewModal.classList.remove('active');
-    }
-  });
+  if (elements.btnModalShare) {
+    elements.btnModalShare.addEventListener('click', triggerNativeShare);
+  }
   elements.btnModalDownload.addEventListener('click', () => {
     if (currentExportedBlob) {
       const fileName = downloadBlobFile(currentExportedBlob, 'photobooth-strip');
       showToast(`★ DOWNLOADED: ${fileName} ★`, 2000);
+    }
+  });
+  elements.btnCloseModal.addEventListener('click', closePreviewModal);
+  elements.btnModalCloseBottom.addEventListener('click', closePreviewModal);
+  elements.previewModal.addEventListener('click', (e) => {
+    if (e.target === elements.previewModal) {
+      closePreviewModal();
     }
   });
 }
