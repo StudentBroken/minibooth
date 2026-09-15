@@ -6,19 +6,68 @@ import { frameManager } from './frames.js';
 import { FILTERS } from './filters.js';
 import { renderStrip } from './renderer.js';
 
-// Application State
+// LocalStorage Persistence Key
+const SETTINGS_STORAGE_KEY = 'retro_comic_photobooth_settings_v1';
+
+function loadStoredSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Could not read settings from localStorage:', e);
+  }
+  return {};
+}
+
+const saved = loadStoredSettings();
+
+// Application State (Hydrated from LocalStorage)
 const state = {
   activeView: 'booth', // 'booth' or 'studio'
   capturedPhotos: [],  // Array of 5 photo dataURLs
-  selectedLayoutId: 'strip-4',
+  selectedLayoutId: saved.selectedLayoutId || 'strip-4',
   slottedPhotos: [],   // Array of photo dataURLs for each slot of the layout
   activeSlotIndex: 0,  // Currently targeted slot for photo placement
-  selectedFilterId: 'comic-halftone',
-  boothTitle: '★ RETRO COMIC BOOTH ★',
-  boothDate: '',
+  selectedFilterId: saved.selectedFilterId || 'comic-halftone',
+  boothTitle: saved.boothTitle !== undefined ? saved.boothTitle : '★ RETRO COMIC BOOTH ★',
+  boothDate: saved.boothDate || '',
   isShooting: false,
-  cancelShooting: false
+  cancelShooting: false,
+  hasCameraPermission: !!saved.hasCameraPermission
 };
+
+// Restore saved Frame
+if (saved.selectedFrameId) {
+  frameManager.selectFrame(saved.selectedFrameId);
+}
+
+// Restore saved Sound setting
+if (saved.soundEnabled !== undefined) {
+  sfx.enabled = saved.soundEnabled;
+}
+
+/**
+ * Persist current settings to LocalStorage
+ */
+function persistSettings() {
+  try {
+    const dataToSave = {
+      selectedLayoutId: state.selectedLayoutId,
+      selectedFilterId: state.selectedFilterId,
+      selectedFrameId: frameManager.selectedFrameId,
+      boothTitle: state.boothTitle,
+      boothDate: state.boothDate,
+      soundEnabled: sfx.enabled,
+      facingMode: camera ? camera.facingMode : (saved.facingMode || 'user'),
+      deviceId: camera ? camera.deviceId : (saved.deviceId || null),
+      isMirrored: camera ? camera.isMirrored : (saved.isMirrored !== undefined ? saved.isMirrored : true),
+      hasCameraPermission: !!state.hasCameraPermission
+    };
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(dataToSave));
+  } catch (e) {
+    console.warn('Could not save settings to localStorage:', e);
+  }
+}
 
 // DOM Elements
 const elements = {
@@ -119,8 +168,12 @@ function downloadBlobFile(blob, baseName = 'photobooth-strip') {
   return fileName;
 }
 
-// Initialize Camera Manager
-const camera = new CameraManager(elements.videoFeed);
+// Initialize Camera Manager with saved preferences
+const camera = new CameraManager(elements.videoFeed, {
+  facingMode: saved.facingMode || 'user',
+  deviceId: saved.deviceId || null,
+  isMirrored: saved.isMirrored !== undefined ? saved.isMirrored : true
+});
 
 /**
  * Show a comic styled toast message
@@ -159,6 +212,8 @@ async function setupCamera() {
   try {
     elements.cameraFallback.style.display = 'none';
     await camera.init();
+    state.hasCameraPermission = true;
+    persistSettings();
     populateCameraDevices();
     showToast('★ CAMERA READY! 5-SHOT BOOTH IS LIVE ★', 2200);
   } catch (err) {
@@ -178,6 +233,9 @@ function populateCameraDevices() {
     const opt = document.createElement('option');
     opt.value = dev.deviceId;
     opt.textContent = dev.label || `Camera ${idx + 1}`;
+    if (camera.deviceId && dev.deviceId === camera.deviceId) {
+      opt.selected = true;
+    }
     elements.cameraSelect.appendChild(opt);
   });
 }
@@ -413,6 +471,7 @@ function initLayoutOptions() {
       autoFillSlots();
       document.querySelectorAll('#layout-options-grid .option-card').forEach(c => c.classList.remove('active'));
       card.classList.add('active');
+      persistSettings();
       renderStudio();
     });
 
@@ -446,6 +505,7 @@ function initFrameOptions() {
       frameManager.selectFrame(f.id);
       document.querySelectorAll('#frame-options-grid .option-card').forEach(c => c.classList.remove('active'));
       card.classList.add('active');
+      persistSettings();
       renderStudio();
     });
 
@@ -473,6 +533,7 @@ function initFilterOptions() {
       state.selectedFilterId = fil.id;
       document.querySelectorAll('#filter-options-grid .option-card').forEach(c => c.classList.remove('active'));
       card.classList.add('active');
+      persistSettings();
       renderStudio();
     });
 
@@ -488,6 +549,7 @@ function setupEvents() {
   elements.btnSoundToggle.addEventListener('click', () => {
     sfx.enabled = !sfx.enabled;
     elements.soundIcon.textContent = sfx.enabled ? '🔊' : '🔇';
+    persistSettings();
     showToast(sfx.enabled ? 'SOUND EFFECTS: ON' : 'SOUND EFFECTS: OFF', 1200);
   });
 
@@ -495,6 +557,7 @@ function setupEvents() {
   elements.btnFlipCam.addEventListener('click', async () => {
     try {
       await camera.switchFacingMode();
+      persistSettings();
       showToast(`CAMERA: ${camera.facingMode.toUpperCase()}`, 1200);
     } catch (e) {
       showToast('Could not flip camera', 1500);
@@ -503,12 +566,14 @@ function setupEvents() {
 
   elements.btnMirrorCam.addEventListener('click', () => {
     const isMirrored = camera.toggleMirror();
+    persistSettings();
     showToast(isMirrored ? 'MIRROR: ON' : 'MIRROR: OFF', 1200);
   });
 
   elements.cameraSelect.addEventListener('change', (e) => {
     if (e.target.value) {
       camera.selectDevice(e.target.value);
+      persistSettings();
     }
   });
 
@@ -608,6 +673,7 @@ function setupEvents() {
       const dataUrl = loadEvt.target.result;
       frameManager.addCustomFrame(file.name.replace(/\.[^/.]+$/, ''), dataUrl);
       initFrameOptions();
+      persistSettings();
       renderStudio();
       showToast(`Custom Frame Added: ${file.name}!`, 1800);
     };
@@ -617,11 +683,13 @@ function setupEvents() {
   // Text inputs
   elements.inputBoothTitle.addEventListener('input', (e) => {
     state.boothTitle = e.target.value;
+    persistSettings();
     renderStudio();
   });
 
   elements.inputBoothDate.addEventListener('input', (e) => {
     state.boothDate = e.target.value;
+    persistSettings();
     renderStudio();
   });
 
@@ -743,6 +811,11 @@ function setupEvents() {
  * App Boot
  */
 async function main() {
+  // Synchronize UI inputs with saved localStorage values
+  elements.inputBoothTitle.value = state.boothTitle;
+  elements.inputBoothDate.value = state.boothDate;
+  elements.soundIcon.textContent = sfx.enabled ? '🔊' : '🔇';
+
   initLayoutOptions();
   initFrameOptions();
   initFilterOptions();
