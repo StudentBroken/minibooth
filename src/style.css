@@ -1239,6 +1239,15 @@ body {
   box-shadow: var(--shadow-comic-sm);
 }
 
+.preview-modal-backdrop,
+.preview-modal-card,
+.preview-modal-body,
+.preview-img-wrap {
+  -webkit-touch-callout: default !important;
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+}
+
 .preview-modal-body {
   padding: 14px;
   overflow-y: auto;
@@ -1277,6 +1286,7 @@ body {
   padding: 8px 12px;
   border: 1px dashed var(--paper-shadow);
   border-radius: 4px;
+  width: 100%;
 }
 
 .preview-modal-footer {
@@ -1289,9 +1299,10 @@ body {
 }
 
 .preview-modal-footer .btn-retro {
-  flex: 1;
-  min-width: 130px;
-  font-size: 1rem;
-  padding: 8px 12px;
+  flex: 1 1 calc(50% - 8px);
+  min-width: 120px;
+  font-size: 0.95rem;
+  padding: 10px 8px;
+  text-align: center;
 }
 

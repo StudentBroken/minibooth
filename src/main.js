@@ -131,6 +131,7 @@ const elements = {
   previewModalImg: document.getElementById('preview-modal-img'),
   btnCloseModal: document.getElementById('btn-close-modal'),
   btnModalShare: document.getElementById('btn-modal-share'),
+  btnModalNewTab: document.getElementById('btn-modal-new-tab'),
   btnModalDownload: document.getElementById('btn-modal-download'),
   btnModalCloseBottom: document.getElementById('btn-modal-close-bottom'),
 
@@ -138,20 +139,43 @@ const elements = {
   toast: document.getElementById('comic-toast')
 };
 
-// Variable to store current exported blob
+// Variables to store current exported artifacts
 let currentExportedBlob = null;
-let currentExportedUrl = null;
-let exportUpdateTimeout = null;
+let currentExportedDataUrl = null;
+let currentExportedFile = null;
+let currentExportedFileName = 'photobooth-strip.png';
+
+/**
+ * Generate formatted filename for the photo strip
+ */
+function generateStripFileName(baseName = 'photobooth-strip') {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `${baseName}-${dateStr}.png`;
+}
+
+/**
+ * Synchronously convert base64 Data URL to Blob (instant, no async callback delay)
+ */
+function dataUrlToBlob(dataUrl) {
+  const parts = dataUrl.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const bstr = atob(parts[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
 
 /**
  * Trigger file download from Blob with guaranteed valid filename & extension
  */
 function downloadBlobFile(blob, baseName = 'photobooth-strip') {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  const fileName = `${baseName}-${dateStr}.png`;
-
+  const fileName = currentExportedFileName || generateStripFileName(baseName);
   const blobUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.style.display = 'none';
@@ -442,6 +466,59 @@ function updateActiveSlotIndicator() {
 }
 
 /**
+ * Calculate safe export scale ensuring canvas dimensions never exceed 3200px
+ * (Guarantees iOS WebKit memory & canvas buffer stability without crashes)
+ */
+function getSafeExportScale(layout) {
+  const maxDim = Math.max(layout.baseWidth, layout.baseHeight);
+  const maxAllowedDim = 3200;
+  return Math.min(2, Math.max(1, Math.floor((maxAllowedDim / maxDim) * 10) / 10));
+}
+
+/**
+ * Update high-res export cache and pre-generate blob/dataUrl/file
+ */
+async function updateExportCache() {
+  try {
+    const layout = getLayoutById(state.selectedLayoutId);
+    const frame = frameManager.getSelectedFrame();
+    const scale = getSafeExportScale(layout);
+
+    const exportCanvas = document.createElement('canvas');
+    await renderStrip({
+      targetCanvas: exportCanvas,
+      layout,
+      slottedPhotos: state.slottedPhotos,
+      frame,
+      filterId: state.selectedFilterId,
+      title: state.boothTitle,
+      dateText: state.boothDate,
+      scale,
+      activeSlotIndex: -1 // Clean strip without red targeted panel outline
+    });
+
+    const dataUrl = exportCanvas.toDataURL('image/png');
+    currentExportedDataUrl = dataUrl;
+
+    const blob = dataUrlToBlob(dataUrl);
+    currentExportedBlob = blob;
+
+    const fileName = generateStripFileName('photobooth-strip');
+    currentExportedFileName = fileName;
+    currentExportedFile = new File([blob], fileName, {
+      type: 'image/png',
+      lastModified: Date.now()
+    });
+
+    if (elements.previewModalImg) {
+      elements.previewModalImg.src = dataUrl;
+    }
+  } catch (err) {
+    console.warn('Background export cache generation error:', err);
+  }
+}
+
+/**
  * Render complete Studio Customizer & Canvas
  */
 async function renderStudio() {
@@ -463,50 +540,8 @@ async function renderStudio() {
     activeSlotIndex: state.activeSlotIndex
   });
 
-  // Pre-generate high-res export blob in the background so user clicks are instant and preserve iOS user activation
-  scheduleExportCacheUpdate();
-}
-
-/**
- * Schedule background high-res strip export cache update (debounced)
- */
-function scheduleExportCacheUpdate() {
-  if (exportUpdateTimeout) clearTimeout(exportUpdateTimeout);
-  exportUpdateTimeout = setTimeout(updateExportBlob, 200);
-}
-
-async function updateExportBlob() {
-  try {
-    const exportCanvas = document.createElement('canvas');
-    const layout = getLayoutById(state.selectedLayoutId);
-    const frame = frameManager.getSelectedFrame();
-
-    await renderStrip({
-      targetCanvas: exportCanvas,
-      layout,
-      slottedPhotos: state.slottedPhotos,
-      frame,
-      filterId: state.selectedFilterId,
-      title: state.boothTitle,
-      dateText: state.boothDate,
-      scale: 2,
-      activeSlotIndex: -1
-    });
-
-    exportCanvas.toBlob((blob) => {
-      if (!blob) return;
-      currentExportedBlob = blob;
-      if (currentExportedUrl) {
-        URL.revokeObjectURL(currentExportedUrl);
-      }
-      currentExportedUrl = URL.createObjectURL(blob);
-      if (elements.previewModalImg) {
-        elements.previewModalImg.src = currentExportedUrl;
-      }
-    }, 'image/png');
-  } catch (err) {
-    console.warn('Background export cache error:', err);
-  }
+  // Update export cache immediately
+  updateExportCache();
 }
 
 /**
@@ -754,10 +789,51 @@ function setupEvents() {
     renderStudio();
   });
 
+  /**
+   * Get pre-rendered export package or generate one synchronously on-the-fly from stripCanvas
+   * Guarantees zero null pointer and zero async wait during user gesture!
+   */
+  function getReadyExportPackage() {
+    if (currentExportedBlob && currentExportedFile && currentExportedDataUrl) {
+      return {
+        blob: currentExportedBlob,
+        file: currentExportedFile,
+        dataUrl: currentExportedDataUrl,
+        fileName: currentExportedFileName
+      };
+    }
+
+    // Synchronous immediate fallback from live canvas
+    try {
+      const dataUrl = elements.stripCanvas.toDataURL('image/png');
+      const blob = dataUrlToBlob(dataUrl);
+      const fileName = generateStripFileName('photobooth-strip');
+      const file = new File([blob], fileName, {
+        type: 'image/png',
+        lastModified: Date.now()
+      });
+
+      currentExportedDataUrl = dataUrl;
+      currentExportedBlob = blob;
+      currentExportedFile = file;
+      currentExportedFileName = fileName;
+
+      if (elements.previewModalImg) {
+        elements.previewModalImg.src = dataUrl;
+      }
+
+      return { blob, file, dataUrl, fileName };
+    } catch (e) {
+      console.error('Fallback export generation failed:', e);
+      return null;
+    }
+  }
+
   // Modal helpers
   function openPreviewModal() {
-    if (currentExportedUrl && elements.previewModalImg) {
-      elements.previewModalImg.src = currentExportedUrl;
+    const pkg = getReadyExportPackage();
+    if (pkg && elements.previewModalImg) {
+      elements.previewModalImg.src = pkg.dataUrl;
     }
     elements.previewModal.classList.add('active');
   }
@@ -766,40 +842,117 @@ function setupEvents() {
     elements.previewModal.classList.remove('active');
   }
 
-  // Native Share Sheet (invoked synchronously within user gesture)
-  function triggerNativeShare() {
-    if (!currentExportedBlob) {
-      showToast('Preparing strip, please wait a moment...', 1500);
+  /**
+   * Open photo strip in a dedicated tab/window for 100% reliable iOS long-press saving
+   */
+  function openImageInNewTab() {
+    const pkg = getReadyExportPackage();
+    if (!pkg) {
+      showToast('Could not open image', 1500);
       return;
     }
 
-    const file = new File([currentExportedBlob], 'photobooth-strip.png', {
-      type: 'image/png',
-      lastModified: Date.now()
-    });
+    try {
+      const newTab = window.open('');
+      if (newTab) {
+        newTab.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+  <title>Photobooth Strip</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #201D1A;
+      color: #FAF6ED;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px 12px 36px;
+    }
+    .save-banner {
+      background: #E63946;
+      color: #FFF;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 12px 20px;
+      border-radius: 24px;
+      margin-bottom: 18px;
+      text-align: center;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+    .img-wrap {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      max-width: 650px;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      -webkit-touch-callout: default !important;
+      -webkit-user-select: auto !important;
+      user-select: auto !important;
+      pointer-events: auto !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="save-banner">📸 Touch &amp; Hold image below to Save to Photos</div>
+  <div class="img-wrap">
+    <img src="${pkg.dataUrl}" alt="Photobooth Strip" />
+  </div>
+</body>
+</html>`);
+        newTab.document.close();
+        showToast('Opened in new tab! Touch & hold image to save.', 2500);
+        return;
+      }
+    } catch (err) {
+      console.warn('Could not open new tab:', err);
+    }
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    openPreviewModal();
+  }
+
+  /**
+   * Native Share Sheet (strictly synchronous call on user gesture)
+   * Note: On iOS Safari, passing only { files: [file] } is critical for native Camera Roll saving.
+   */
+  function triggerNativeShare() {
+    const pkg = getReadyExportPackage();
+    if (!pkg) {
+      showToast('Preparing strip, please wait...', 1500);
+      return;
+    }
+
+    if (navigator.canShare && navigator.canShare({ files: [pkg.file] })) {
       navigator.share({
-        files: [file],
-        title: 'Retro Comic Photobooth Strip'
+        files: [pkg.file]
       }).then(() => {
-        showToast('★ SHARED! ★', 1500);
+        showToast('★ SHARED / SAVED! ★', 2000);
       }).catch(err => {
         if (err.name !== 'AbortError') {
-          console.warn('Share error:', err);
+          console.warn('Share error, opening preview modal:', err);
           openPreviewModal();
         }
       });
     } else {
       openPreviewModal();
-      downloadBlobFile(currentExportedBlob, 'photobooth-strip');
-      showToast('Image opened in preview for saving!', 2500);
+      showToast('Touch & hold image to Save to Photos!', 3000);
     }
   }
 
-  // Download / Save Handler (iOS & Desktop friendly)
+  /**
+   * Download / Save Handler (iOS & Desktop optimized)
+   */
   function triggerDownloadOrSave() {
-    if (!currentExportedBlob) {
+    const pkg = getReadyExportPackage();
+    if (!pkg) {
       showToast('Preparing strip, please wait...', 1500);
       return;
     }
@@ -808,18 +961,33 @@ function setupEvents() {
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
     if (isIOS) {
-      // On iPhone: open modal for long-press "Save to Photos" AND trigger native Share Sheet
+      // On iPhone / iPad:
+      // Try native Share Sheet first: has the native iOS "Save Image" to Photos option!
+      if (navigator.canShare && navigator.canShare({ files: [pkg.file] })) {
+        navigator.share({
+          files: [pkg.file]
+        }).then(() => {
+          showToast('★ SAVED TO PHOTOS / SHARED! ★', 2200);
+        }).catch(err => {
+          if (err.name !== 'AbortError') {
+            console.warn('iOS share error, opening preview modal:', err);
+            openPreviewModal();
+          }
+        });
+        return;
+      }
+
+      // If Web Share is not supported (e.g. HTTP on local network):
       openPreviewModal();
-      triggerNativeShare();
+      showToast('Touch & hold image to Save to Photos!', 3000);
     } else {
       // On Desktop / Android: trigger direct download
-      const fileName = downloadBlobFile(currentExportedBlob, 'photobooth-strip');
-      openPreviewModal();
-      showToast(`★ SAVED: ${fileName} ★`, 2500);
+      const fileName = downloadBlobFile(pkg.blob, 'photobooth-strip');
+      showToast(`★ DOWNLOADED: ${fileName} ★`, 2500);
     }
   }
 
-  // Buttons
+  // Export Buttons
   elements.btnDownloadStrip.addEventListener('click', triggerDownloadOrSave);
   elements.btnShareStrip.addEventListener('click', triggerNativeShare);
 
@@ -827,12 +995,21 @@ function setupEvents() {
   if (elements.btnModalShare) {
     elements.btnModalShare.addEventListener('click', triggerNativeShare);
   }
+  if (elements.btnModalNewTab) {
+    elements.btnModalNewTab.addEventListener('click', openImageInNewTab);
+  }
   elements.btnModalDownload.addEventListener('click', () => {
-    if (currentExportedBlob) {
-      const fileName = downloadBlobFile(currentExportedBlob, 'photobooth-strip');
+    const pkg = getReadyExportPackage();
+    if (pkg) {
+      const fileName = downloadBlobFile(pkg.blob, 'photobooth-strip');
       showToast(`★ DOWNLOADED: ${fileName} ★`, 2000);
     }
   });
+  if (elements.previewModalImg) {
+    elements.previewModalImg.addEventListener('click', () => {
+      showToast('Touch & hold image to Save to Photos!', 2200);
+    });
+  }
   elements.btnCloseModal.addEventListener('click', closePreviewModal);
   elements.btnModalCloseBottom.addEventListener('click', closePreviewModal);
   elements.previewModal.addEventListener('click', (e) => {
