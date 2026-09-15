@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="#F5EFE0"/>
+  <!-- 70s Warm Retro Diagonal Stripes -->
+  <path d="M-12 12 L12 -12 L20 -12 L-12 20 Z" fill="#D36B4E"/>
+  <path d="M-12 22 L22 -12 L28 -12 L-12 28 Z" fill="#E6AE4A"/>
+  <path d="M-12 30 L30 -12 L34 -12 L-12 34 Z" fill="#2E6B70"/>
+  
+  <path d="M6 54 L54 6 L62 6 L6 62 Z" fill="#D36B4E"/>
+  <path d="M14 54 L54 14 L60 14 L14 60 Z" fill="#E6AE4A"/>
+  <path d="M22 54 L54 22 L58 22 L22 58 Z" fill="#2E6B70"/>
+
+  <path d="M-12 60 L60 -12 L68 -12 L-12 68 Z" fill="#D36B4E"/>
+  <path d="M-4 60 L60 -4 L64 -4 L-4 64 Z" fill="#E6AE4A"/>
+</svg>

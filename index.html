@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Retro Comic Photobooth</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Retro Comic Fonts: Bangers (comic headline), Special Elite (vintage typewriter stamp), Space Grotesk (bold retro modern UI) -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bangers&family=Space+Grotesk:wght@500;700&family=Special+Elite&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- Full-screen Shutter Flash Effect -->
+    <div id="shutter-flash" class="shutter-flash"></div>
+
+    <div class="app-container">
+      <!-- Masthead Header -->
+      <header class="retro-header">
+        <div class="header-inner">
+          <div class="brand-group">
+            <div class="booth-light-indicator" id="booth-indicator" title="Booth Status">
+              <span class="blinking-bulb"></span>
+            </div>
+            <div class="logo-wrapper">
+              <h1 class="comic-logo">RETRO COMIC BOOTH</h1>
+              <span class="logo-sub">AUTOMATIC 5-SHOT ANALOG PHOTO STUDIO</span>
+            </div>
+          </div>
+          <div class="header-actions">
+            <button id="btn-sound-toggle" class="btn-icon" title="Toggle Sound (Beeps & Shutter)">
+              <span id="sound-icon">🔊</span>
+            </button>
+            <button id="btn-switch-view" class="btn-retro btn-small" style="display: none;">
+              <span id="switch-view-text">EDIT STRIP ➔</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main App Content Screens -->
+      <main class="main-content">
+        <!-- ================= VIEW 1: CAMERA PHOTOBOOTH ================= -->
+        <section id="view-booth" class="app-view active">
+          <div class="booth-layout">
+            <!-- Camera Monitor Frame -->
+            <div class="camera-monitor-card">
+              <div class="monitor-bezel">
+                <div class="monitor-header">
+                  <span class="tape-label">LIVE FEED • 60 FPS</span>
+                  <div class="camera-selector-wrap">
+                    <select id="camera-select" class="retro-select" title="Choose Camera Device">
+                      <option value="">Default Camera</option>
+                    </select>
+                  </div>
+                  <div class="monitor-header-buttons">
+                    <button id="btn-flip-cam" class="btn-retro-mini" title="Flip Front / Rear Camera">
+                      🔄 FLIP
+                    </button>
+                    <button id="btn-mirror-cam" class="btn-retro-mini" title="Toggle Mirror Effect">
+                      🪞 MIRROR
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Live Video Container -->
+                <div class="video-container" id="video-container">
+                  <video id="camera-feed" playsinline autoplay muted></video>
+
+                  <!-- Comic Crosshair Overlay -->
+                  <div class="viewfinder-crosshairs">
+                    <div class="vf-corner vf-tl"></div>
+                    <div class="vf-corner vf-tr"></div>
+                    <div class="vf-corner vf-bl"></div>
+                    <div class="vf-corner vf-br"></div>
+                    <div class="vf-center"></div>
+                  </div>
+
+                  <!-- Countdown Overlay -->
+                  <div id="countdown-overlay" class="countdown-overlay">
+                    <div class="countdown-burst">
+                      <div class="countdown-number" id="countdown-num">6</div>
+                      <div class="countdown-sub" id="countdown-sub">GET READY!</div>
+                    </div>
+                  </div>
+
+                  <!-- Shot Counter Badge -->
+                  <div id="shot-badge" class="shot-badge" style="display: none;">
+                    SHOT <span id="current-shot-index">1</span> / 5
+                  </div>
+
+                  <!-- Permission / Error Notice -->
+                  <div id="camera-fallback-msg" class="camera-fallback-card" style="display: none;">
+                    <div class="fallback-icon">📷</div>
+                    <h3>Camera Access Needed</h3>
+                    <p id="camera-fallback-text">Please allow camera permissions to take your photobooth pictures.</p>
+                    <div class="fallback-actions">
+                      <button id="btn-retry-camera" class="btn-retro btn-primary">RETRY CAMERA</button>
+                      <button id="btn-mock-photos" class="btn-retro btn-secondary">TRY DEMO PHOTOS</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Live Shot Thumbnails Filmstrip Tray -->
+              <div class="booth-shot-tray">
+                <div class="tray-label">FILM ROLL (5 SHOTS):</div>
+                <div class="shot-thumbnails-grid" id="booth-thumbnails">
+                  <div class="shot-thumb-slot" data-index="0"><span>#1</span></div>
+                  <div class="shot-thumb-slot" data-index="1"><span>#2</span></div>
+                  <div class="shot-thumb-slot" data-index="2"><span>#3</span></div>
+                  <div class="shot-thumb-slot" data-index="3"><span>#4</span></div>
+                  <div class="shot-thumb-slot" data-index="4"><span>#5</span></div>
+                </div>
+              </div>
+
+              <!-- Main Shutter Action Console -->
+              <div class="booth-controls-bar">
+                <button id="btn-start-booth" class="btn-start-booth">
+                  <span class="btn-star">★</span>
+                  <span class="btn-main-text">START 5-SHOT BOOTH</span>
+                  <span class="btn-sub-text">6-SEC COUNTDOWN PER SHOT</span>
+                </button>
+
+                <div id="booth-active-status" class="booth-active-status" style="display: none;">
+                  <div class="status-pulse-dot"></div>
+                  <span id="booth-status-text">SHOT 1 IN PROGRESS...</span>
+                  <button id="btn-cancel-booth" class="btn-retro-mini btn-cancel">CANCEL</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 2: STRIP STUDIO & CUSTOMIZER ================= -->
+        <section id="view-studio" class="app-view">
+          <!-- Top Taken Photos Shelf -->
+          <div class="studio-top-shelf">
+            <div class="shelf-header">
+              <div class="shelf-title-group">
+                <span class="badge-tag">STEP 1</span>
+                <h2>YOUR 5 CAPTURED PHOTOS</h2>
+              </div>
+              <div class="shelf-instructions">
+                👉 Click any photo below to place it into the selected strip panel!
+              </div>
+              <div class="shelf-actions">
+                <button id="btn-quick-fill" class="btn-retro-mini" title="Place photos 1-4 in order">
+                  ⚡ AUTO-FILL ORDER
+                </button>
+                <button id="btn-clear-slots" class="btn-retro-mini" title="Clear all placed photos">
+                  ✕ CLEAR SLOTS
+                </button>
+                <button id="btn-retake-booth" class="btn-retro-mini btn-warning" title="Take 5 new pictures">
+                  📸 RETAKE PICS
+                </button>
+              </div>
+            </div>
+
+            <!-- 5 Captured Photos Clickable Tray -->
+            <div class="captured-photos-tray" id="captured-photos-tray">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Studio Main Workspace: Preview + Customizer -->
+          <div class="studio-workspace">
+            <!-- Left Column: Interactive Strip Canvas Preview -->
+            <div class="studio-canvas-column">
+              <div class="canvas-header-bar">
+                <span class="tape-label">LIVE STRIP PREVIEW (CLICK SLOTS TO TARGET)</span>
+                <span id="active-slot-pill" class="active-slot-pill">Selected: Panel #1</span>
+              </div>
+              <div class="canvas-scroll-wrapper">
+                <div class="canvas-mount" id="canvas-mount">
+                  <canvas id="strip-canvas"></canvas>
+                </div>
+              </div>
+              <div class="canvas-tip-text">
+                💡 Tip: Click any photo slot directly on the strip to select it, then tap a photo above!
+              </div>
+            </div>
+
+            <!-- Right Column: Customization Controls Panel -->
+            <div class="studio-controls-column">
+              <div class="retro-card">
+                <!-- Tabs for Mobile/Desktop Switching -->
+                <div class="control-tabs">
+                  <button class="tab-btn active" data-tab="tab-layout">1. LAYOUT</button>
+                  <button class="tab-btn" data-tab="tab-frame">2. FRAME PATTERN</button>
+                  <button class="tab-btn" data-tab="tab-filter">3. FILTERS</button>
+                  <button class="tab-btn" data-tab="tab-text">4. TEXT STAMP</button>
+                </div>
+
+                <!-- Tab 1: Layout Styles -->
+                <div class="tab-pane active" id="tab-layout">
+                  <div class="tab-pane-title">CHOOSE LAYOUT STYLE:</div>
+                  <div class="options-grid" id="layout-options-grid">
+                    <!-- Injected dynamically from layouts.js -->
+                  </div>
+                </div>
+
+                <!-- Tab 2: Frame Background Patterns -->
+                <div class="tab-pane" id="tab-frame">
+                  <div class="tab-pane-title">
+                    <span>CHOOSE BACKGROUND PATTERN:</span>
+                  </div>
+                  <p class="tab-note">
+                    Files stored in <code>public/frames/</code>. You can also upload your own pattern file!
+                  </p>
+                  <div class="frame-upload-row">
+                    <label for="input-custom-frame" class="btn-retro btn-secondary btn-file-upload">
+                      📁 UPLOAD CUSTOM PATTERN
+                      <input type="file" id="input-custom-frame" accept="image/*,.svg" style="display: none;" />
+                    </label>
+                  </div>
+                  <div class="options-grid frames-grid" id="frame-options-grid">
+                    <!-- Injected dynamically from frames.js -->
+                  </div>
+                </div>
+
+                <!-- Tab 3: Retro & Comic Filters -->
+                <div class="tab-pane" id="tab-filter">
+                  <div class="tab-pane-title">CHOOSE RETRO FILTER:</div>
+                  <div class="options-grid filters-grid" id="filter-options-grid">
+                    <!-- Injected dynamically from filters.js -->
+                  </div>
+                </div>
+
+                <!-- Tab 4: Text Stamp & Customization -->
+                <div class="tab-pane" id="tab-text">
+                  <div class="tab-pane-title">CUSTOMIZE FOOTER STAMP:</div>
+                  <div class="form-group">
+                    <label class="retro-label" for="input-booth-title">Strip Title Banner:</label>
+                    <input
+                      type="text"
+                      id="input-booth-title"
+                      class="retro-input"
+                      value="★ RETRO COMIC BOOTH ★"
+                      maxlength="30"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label class="retro-label" for="input-booth-date">Date / Edition Stamp:</label>
+                    <input
+                      type="text"
+                      id="input-booth-date"
+                      class="retro-input"
+                      placeholder="e.g. SEP 15, 2026 • NO. 001"
+                      maxlength="35"
+                    />
+                  </div>
+                </div>
+
+                <!-- Strip Action Buttons: Download & Share -->
+                <div class="export-actions-card">
+                  <button id="btn-download-strip" class="btn-retro btn-primary btn-large btn-download">
+                    💾 DOWNLOAD PHOTO STRIP
+                  </button>
+                  <button id="btn-share-strip" class="btn-retro btn-secondary btn-large btn-share">
+                    📱 SHARE STRIP
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Preview / Save Modal (Mobile-Friendly & Desktop) -->
+      <div id="preview-modal" class="preview-modal-backdrop">
+        <div class="preview-modal-card">
+          <div class="preview-modal-header">
+            <h3>★ YOUR PHOTO STRIP IS READY! ★</h3>
+            <button id="btn-close-modal" class="btn-close-modal" title="Close">✕</button>
+          </div>
+          <div class="preview-modal-body">
+            <div class="preview-img-wrap">
+              <img id="preview-modal-img" src="" alt="Photobooth Strip Preview" />
+            </div>
+            <p class="preview-instructions">
+              📱 On iPhone/Android: <strong>Touch and hold (long press)</strong> the image above to save directly to your Camera Roll / Photos!
+            </p>
+          </div>
+          <div class="preview-modal-footer">
+            <button id="btn-modal-download" class="btn-retro btn-primary">💾 SAVE / DOWNLOAD</button>
+            <button id="btn-modal-close-bottom" class="btn-retro btn-secondary">DONE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast / Notification Bubble -->
+      <div id="comic-toast" class="comic-toast"></div>
+    </div>
+
+    <!-- Application Script Entry -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
