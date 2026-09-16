@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playlist & Audio
+playlist/
+*.mp3
+*.m4a
+*.webm
